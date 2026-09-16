@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function autenticado() { return request.auth != null; }
+    function proprio(uid) { return autenticado() && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      allow read: if proprio(uid);
+      // Perfis devem ser criados pelo administrador no Console ou por backend confiável.
+      allow create: if false;
+      // O usuário não pode alterar o próprio perfil, status ou permissões.
+      allow update: if proprio(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome']);
+      allow delete: if false;
+    }
+
+    match /reservas/{reservaId} {
+      allow read: if autenticado();
+      allow create: if autenticado()
+        && request.resource.data.usuarioId == request.auth.uid
+        && request.resource.data.status == 'confirmada';
+      // Um professor só pode cancelar a própria reserva. Reservas de terceiros
+      // exigem um fluxo administrativo separado e não são apagadas pelo cliente.
+      allow delete: if proprio(resource.data.usuarioId);
+      allow update: if false;
+    }
+  }
+}
